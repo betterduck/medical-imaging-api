@@ -9,3 +9,11 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/patients")
+def get_patients():
+    patients = [
+        {"id": 1, "name": "John Doe", "mrn": "MRN001"},
+        {"id": 2, "name": "Jane Smith", "mrn": "MRN002"}
+    ]
+    return {"patients": patients}
