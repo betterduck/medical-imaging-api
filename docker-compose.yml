@@ -1,0 +1,29 @@
+# This file defines all the services (containers) our application needs
+
+version: '3.8'  # Docker Compose file format version
+
+services:  # List of services to run
+  
+  # PostgreSQL Database Service
+  db:
+    image: postgres:15  # Use official PostgreSQL version 15 image from Docker Hub
+    container_name: medical_imaging_db  # Name for this container (easier to identify)
+    environment:  # Environment variables that PostgreSQL needs
+      POSTGRES_USER: postgres  # Database username
+      POSTGRES_PASSWORD: postgres  # Database password (change in production!)
+      POSTGRES_DB: medical_imaging  # Name of the database to create
+    ports:
+      - "5432:5432"  # Map port 5432 on your computer to port 5432 in container
+                     # Format: "YOUR_COMPUTER:CONTAINER"
+                     # This lets you connect to the database at localhost:5432
+    volumes:
+      # USAGE: "I want to use volume 'postgres_data' and map it to this path"
+      - postgres_data:/var/lib/postgresql/data
+      #     ↑              ↑
+      #  Volume name    Path inside container
+
+# DECLARATION: "Create a volume called 'postgres_data'"
+volumes:
+  postgres_data:  # Create it with default settings
+  #            ↑
+  #   Nothing here = use defaults (store locally on disk)
