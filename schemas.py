@@ -4,7 +4,8 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import date, datetime
 from uuid import UUID
-from typing import Optional
+from typing import List, Optional 
+from models import StudyModality, BodyPart, StudyStatus 
 
 # Base schema with common fields
 class PatientBase(BaseModel):
@@ -109,3 +110,85 @@ class PatientResponse(PatientBase):
     # Tell Pydantic to work with SQLAlchemy models
     class Config:
         from_attributes = True  # Allows: PatientResponse.from_orm(db_patient)
+
+class StudyBase(BaseModel):
+    study_date: date = Field(
+        ...,
+        description="Date when the study was conducted",
+        examples=["2023-10-01"]
+    )
+
+    modality: StudyModality = Field(
+        ...,
+        description="Imaging modality used in the study",
+        examples=[StudyModality.CT]
+    )
+
+    body_part: BodyPart = Field(
+        ...,
+        description="Body part examined in the study",
+        examples=[BodyPart.CHEST]
+    )
+
+    description: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Description of the study",
+        examples=["CT scan of the chest to evaluate lung nodules."]
+    )
+
+    @field_validator('study_date')
+    @classmethod
+    def validate_study_date(cls, v):
+        if v > date.today():
+            raise ValueError('Study date cannot be in the future')
+        return v
+    
+class StudyCreate(StudyBase):
+    patient_id: UUID = Field(
+        ...,
+        description="UUID of the patient associated with this study"
+    )
+
+    status: Optional[StudyStatus] = Field(
+        StudyStatus.PLANNED,
+        description="Initial status default to PLANNED"
+    )
+
+class StudyUpdate(BaseModel):
+    study_date: Optional[date] = None
+    modality: Optional[StudyModality] = None
+    body_part: Optional[BodyPart] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=1000)
+    status: Optional[StudyStatus] = None
+
+class StudyResponse(StudyBase):
+    id: UUID
+    patient_id: UUID
+    status: StudyStatus
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PatientWithStudies(PatientResponse):
+    studies: List[StudyResponse] = []
+
+class ImageResponse(BaseModel):
+    id: UUID
+    study_id: UUID
+    filename: str
+    mime_type: str
+    file_size: int #bytes
+    created_at: datetime
+
+    @property
+    def file_size_mb(self) -> float:
+        return round(self.file_size / (1024 * 1024), 2)  # Convert bytes to MB
+    
+    class Config:
+        from_attributes = True
+
+class StudyWithImages(StudyResponse):
+    images: List[ImageResponse] = []

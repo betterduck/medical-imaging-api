@@ -1,11 +1,12 @@
-# models.py
 # Database models define the structure of our database tables
 
-from sqlalchemy import Column, String, Date, DateTime, Integer
+from sqlalchemy import Column, String, Date, DateTime, Text, Integer, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 from database import Base
+import enum
 
 # Patient Model
 # This represents the "patients" table in the database
@@ -18,6 +19,14 @@ class Patient(Base):
     """
     
     __tablename__ = "patients"  # Name of the table in PostgreSQL
+
+    studies = relationship(
+        "Study", 
+        back_populates="patient",
+        cascade="all, delete-orphan")
+    # cascade options:
+    # - "all" = apply all cascades
+    # - "delete-orphan" = delete study if removed from patient.studies list
     
     # Columns definition
     # Column() creates a database column
@@ -71,3 +80,97 @@ class Patient(Base):
     # Makes debugging easier - shows patient info when you print()
     def __repr__(self):
         return f"<Patient(mrn={self.mrn}, name={self.first_name} {self.last_name})>"
+
+
+class StudyStatus(str, enum.Enum):
+    PLANNED = "Planned"
+    IN_PROGRESS = "In Progress"
+    COMPLETED = "Completed"
+    REVIEWED = "Reviewed"
+
+class StudyModality(str, enum.Enum):
+    CT = "CT"
+    MRI = "MRI"
+    XRAY = "X-Ray"
+    ULTRASOUND = "Ultrasound"
+
+class BodyPart(str, enum.Enum):
+    HEAD = "Head"
+    CHEST = "Chest"
+    ABDOMEN = "Abdomen"
+    PELVIS = "Pelvis"
+    LIMBS = "Limbs"
+
+class Study(Base):
+    __tablename__ = "studies"
+
+    patient = relationship(
+        "Patient",
+        back_populates="studies"
+    )
+
+    images = relationship(
+        "Image",
+        back_populates="study",
+        cascade="all, delete-orphan"
+    )
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        nullable=False,
+        default=uuid.uuid4
+    )
+
+    patient_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("patients.id"),
+        nullable=False,
+        index= True
+    )
+
+    study_date = Column(
+        Date,
+        nullable=False,
+        index=True
+    )
+
+    modality = Column(
+        SQLEnum(StudyModality),
+        nullable=False,
+        index=True
+    )
+
+    body_part = Column(
+        SQLEnum(BodyPart),
+        nullable=False,
+        index=True
+    )
+
+    description = Column(
+        Text,
+        nullable=True
+    )
+
+    status = Column(
+        SQLEnum(StudyStatus),
+        nullable=False,
+        default=StudyStatus.PLANNED,
+        index=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
+    )
+
+    def __repr__(self):
+        return f"<Study(id={self.id}, modality={self.modality}, body_part={self.body_part}, status={self.status})>"

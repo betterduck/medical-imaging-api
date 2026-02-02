@@ -1,10 +1,13 @@
 # CRUD = Create, Read, Update, Delete
 # Business logic for database operations
 
+from tkinter import Image
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from uuid import UUID
+from file_utils import delete_file
+from image_models import Image
 import models
 import schemas
 
@@ -142,3 +145,130 @@ def delete_patient(db: Session, patient_id: UUID) -> bool:
     db.delete(db_patient)  # Delete from session
     db.commit()            # Save changes
     return True
+
+# Additional CRUD functions for Study model
+def create_study(db: Session, study: schemas.StudyCreate) -> models.Study:
+    db_study = models.Study(**study.model_dump())
+    try:
+        db.add(db_study)
+        db.commit()
+        db.refresh(db_study)
+        return db_study
+    except IntegrityError:
+        db.rollback()
+        raise
+
+def get_studies(
+        db: Session,
+        skip: int=0,
+        limit: int=100,
+        patient_id: Optional[UUID]=None,
+        modality: Optional[models.StudyModality]=None,
+        status: Optional[models.StudyStatus]=None
+) -> List[models.Study]:
+    query = db.query(models.Study)
+    if patient_id:
+        query = query.filter(models.Study.patient_id == patient_id)
+    if modality:
+        query = query.filter(models.Study.modality == modality)
+    if status:
+        query = query.filter(models.Study.status == status)
+    return query.offset(skip).limit(limit).all()
+
+def get_study(db: Session, study_id: UUID) -> Optional[models.Study]:
+    return db.query(models.Study).filter(models.Study.id == study_id).first()
+
+def update_study(
+    db: Session, 
+    study_id: UUID,
+    new_data: schemas.StudyUpdate
+) -> Optional[models.Study]:
+    db_study = get_study(db, study_id)
+    if not db_study:
+        return None
+    
+    new_study = new_data.model_dump(exclude_unset=True)
+    for key, value in new_study.items():
+        setattr(db_study, key, value)
+    db.commit()
+    db.refresh(db_study)
+    return db_study
+
+def delete_study(
+    db: Session,
+    study_id: UUID
+) -> bool:
+    db_study = get_study(db, study_id)
+    if not db_study:
+        return False
+    db.delete(db_study)
+    db.commit()
+    return True
+
+def get_patient_with_studies(
+    db: Session,
+    patient_id: UUID
+) -> Optional[models.Patient]:
+    from sqlalchemy.orm import joinedload
+
+    return db.query(models.Patient)\
+        .options(joinedload(models.Patient.studies))\
+        .filter(models.Patient.id == patient_id).first()
+
+# Additional CRUD functions for Image model
+def create_image(
+    db: Session,
+    study_id: UUID,
+    filename: str,
+    stored_filename: str,
+    file_path: str,
+    file_size: int,
+    mime_type: str
+) -> Image:
+    db_image = Image(
+        study_id=study_id,
+        filename=filename,
+        stored_filename=stored_filename,
+        file_path=file_path,
+        file_size=file_size,
+        mime_type=mime_type
+    )
+
+    db.add(db_image)
+    db.commit()
+    db.refresh(db_image)
+    return db_image
+
+def get_image(
+    db: Session,
+    image_id: UUID
+) -> Optional[Image]:
+    return db.query(Image).filter(Image.id == image_id).first()
+
+def get_study_images(
+    db: Session,
+    study_id: UUID
+) -> List[Image]:
+    from sqlalchemy.orm import joinedload
+
+    study = db.query(models.Study)\
+                .options(joinedload(models.Study.images))\
+                .filter(models.Study.id == study_id)\
+                .first()
+    return study.images if study else []
+
+def delete_image(
+    db: Session,
+    image_id: UUID
+) -> bool:
+    db_image = get_image(db, image_id)
+    if not db_image:
+        return False
+
+    file_path = db_image.file_path
+    db.delete(db_image)
+    db.commit()
+    delete_file(file_path)
+
+    return True
+

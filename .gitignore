@@ -6,4 +6,4 @@ __pycache__/
 .env
 *.db
 .DS_Store
-LEARNING.md
+LEARNING.md"uploads/" 
