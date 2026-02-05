@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from typing import List, Annotated, Optional
 from uuid import UUID
@@ -26,6 +28,8 @@ app = FastAPI(
 )
 
 app.include_router(auth_routes.router)
+app.state.limiter = auth_routes.limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.on_event("startup")
 async def startup_event():
