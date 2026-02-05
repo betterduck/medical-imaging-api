@@ -9,6 +9,9 @@ import models
 import schemas
 import file_utils
 from database import engine, get_db
+from auth_utils import get_current_user, require_role
+from auth_models import User, UserRole
+import auth_routes
 
 # Create all database tables
 # This reads all models that inherit from Base and creates corresponding tables
@@ -21,6 +24,8 @@ app = FastAPI(
     docs_url="/docs",   # Swagger UI documentation
     redoc_url="/redoc"  # ReDoc documentation (alternative format)
 )
+
+app.include_router(auth_routes.router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -45,6 +50,7 @@ def read_root():
 def create_patient(
     patient: schemas.PatientCreate,
     db: Annotated[Session, Depends(get_db)],
+    currrent_user: User = Depends(get_current_user)
 ):
     """
     Create a new patient record.
@@ -75,7 +81,8 @@ def create_patient(
 def get_patients(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Retrieve a list of patients with pagination.
@@ -88,7 +95,16 @@ def get_patients(
     """
     if limit > 100:
         limit = 100  # Enforce maximum limit to prevent large responses
-    return crud.get_patients(db, skip=skip, limit=limit)
+
+    if current_user.role == UserRole.PATIENT:
+        patients = db.query(models.Patient)\
+            .filter(models.Patient.id == current_user.id)\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+    else:
+        patients = crud.get_patients(db, skip=skip, limit=limit)
+    return patients
 
 # READ - Get single patient by ID
 @app.get("/patients/{patient_id}",
@@ -146,7 +162,8 @@ def update_patient(
 )
 def delete_patient(
     patient_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     """
     Delete a patient record by ID.
